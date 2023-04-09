@@ -1,12 +1,12 @@
-
 # Importing all libraries
 import numpy as np
 import matplotlib.pyplot as plt
 import cv2
-from queue import PriorityQueue
 import time
 import math
 import csv
+import os
+
 # Creating class that creates objects with following attributes
 class createNode:
     def __init__(self, pos, parent, c2c, tc, wL, wR, path):
@@ -48,8 +48,6 @@ def invade_obstacle(loc, gap):
     
 
 def get_child(node, goal_pos, gap, w1, w2):
-#     w1 = w1 * (math.pi/30)
-#     w2 = w2 * (math.pi/30)
     children = []
     actionSet = [[0,w1], [w1,0], [w1,w1], [0,w2],
                  [w2,0], [w2,w2], [w1,w2], [w2,w1]]
@@ -127,7 +125,7 @@ def Astar_algo(start_pos, goal_pos, gap , w1, w2, thresh):
         if np.linalg.norm(np.asarray(current.pos[:2]) - np.asarray(goal_pos[:2])) <= thresh:
             pathTaken, rpms, trajectory = backtrack(current)
             end = time.time()
-            print("Goal Found")
+            print("Path Found")
             print('Time taken to execute algorithm: ',(end - start)," sec")
             with open('velocity.csv', 'w', newline='') as file:
                 writer = csv.writer(file)
@@ -156,12 +154,19 @@ def Astar_algo(start_pos, goal_pos, gap , w1, w2, thresh):
 
 
 # Function to visualize the visited nodes and the shortest path using openCV
-def visualization(viz, pathTaken,rpms,trajectory, start_pos, goal_pos):
+def visualization(viz, pathTaken,rpms,trajectory, start_pos, goal_pos, animate=False):
+    imCtr = 0
     plt.rcParams["figure.figsize"] = [30,20]
+#     os.rmdir(dir_path)
     fig, ax = plt.subplots()
+    ax.axis('off')
+    ax.margins(0)
     plt.xlim(0,600)
     plt.ylim(0,200)
-    
+    if animate:
+        if not os.path.exists('animate'):
+            os.makedirs('animate')
+        save = cv2.VideoWriter('turtlebot.avi',cv2.VideoWriter_fourcc('M','J','P','G'),10,(2160,1440))
     # set goal and start
     ax.scatter(start_pos[0],start_pos[1],color = "red")
     ax.scatter(goal_pos[0],goal_pos[1],color = "green")
@@ -186,20 +191,39 @@ def visualization(viz, pathTaken,rpms,trajectory, start_pos, goal_pos):
     boundary4 = (yObs>=195) 
     ax.fill(xObs[boundary4], yObs[boundary4], color='black')
     ax.set_aspect(1)
-    
+    if animate:
+        plt.savefig("animate/animateImg"+str(imCtr)+".png")
+        imCtr += 1
     start_time = time.time()
     
+    # to visualise child exploration
     for ch in viz:
         for xv,yv in ch.path:
             ax.plot(xv,yv, color="cyan")
+        if animate:
+            plt.savefig("animate/animateImg"+str(imCtr)+".png")
+            imCtr += 1
             
-    for x,y,th in pathTaken[::-1]:
-        ax.scatter(x,y, color="black")
-    for p in trajectory[::-1]:
-        for xt,yt in p.path:
-                ax.plot(xt,yt, color="red")
-
-
+    
+#     for x,y,th in pathTaken[::-1]:
+#         ax.scatter(x,y, color="black")
+#         if animate:
+#             plt.savefig("animate/animateImg"+str(imCtr)+".png")
+#             imCtr += 1
+            
+    # to visualize backtrack path
+    for pt,bt_path in zip(trajectory[::-1],pathTaken[::-1]):
+        ax.scatter(bt_path[0],bt_path[1], color="black")
+        for xt,yt in pt.path:
+            ax.plot(xt,yt, color="red")
+        if animate:
+            plt.savefig("animate/animateImg"+str(imCtr)+".png")
+            imCtr += 1
+    if animate:
+        for filename in os.listdir("animate"):
+            img = cv2.imread(os.path.join("animate",filename))
+            save.write(img)
+        save.release()
     end_time = time.time()
     print('Time taken to visualize: ',(end_time - start_time)," sec")
 
@@ -208,11 +232,9 @@ def visualization(viz, pathTaken,rpms,trajectory, start_pos, goal_pos):
 def checkStartGoal(start_pos, goal_pos, gap):
     if not invade_obstacle(start_pos, gap):
         print("Start position is in Obstacle space")
-        print("sahi sahi lagao bhaiya")
         return False
     elif not invade_obstacle(goal_pos, gap):
         print("Goal position is in Obstacle space")
-        print("sahi sahi lagao bhaiya")
         return False
     else:
         return True
@@ -236,10 +258,12 @@ start_pos, goal_pos, gap, w1, w2, thresh = getInputs()
 returnVal = checkStartGoal(start_pos, goal_pos, gap)
 while True:
     if returnVal:
+        print("Finding Path....")
         pathTaken,rpms,trajectory,viz = Astar_algo(start_pos,goal_pos,gap,w1,w2, thresh)
-        visualization(viz,pathTaken,rpms,trajectory,start_pos,goal_pos)
+        animate = False
+        print("Building Visualisation: Animate = ", animate)
+        visualization(viz,pathTaken,rpms,trajectory,start_pos,goal_pos,animate = animate)
         break
     else:
         start_pos, goal_pos, gap, w1, w2, thresh = getInputs()
         returnVal = checkStartGoal(start_pos, goal_pos, gap)
-        
